@@ -33,10 +33,12 @@ public final class PEFileReader {
     }
 
     public void close() {
-        if (dosHeader != null)
+        if (dosHeader != null && dosHeader.address != 0)
             unsafe.freeMemory(dosHeader.address);
-        if (ntHeader != null)
+        if (ntHeader != null && ntHeader.address != 0)
             unsafe.freeMemory(ntHeader.address);
+        if (debugDirectory != null && debugDirectory.address != 0)
+            unsafe.freeMemory(debugDirectory.address);
     }
 
     public File getTargetFile() {
@@ -64,8 +66,9 @@ public final class PEFileReader {
     }
 
     // ---------------------------------------------------------------
-    private NTHeader ntHeader;
+    public NTHeader ntHeader;
     public ImportAddressTable iat;
+    public DebugDirectory debugDirectory;
     public void createNtHeader() {
         final int size = estimateNtHeaderSize();
         final long memNtHeader = unsafe.allocateMemory(size);
@@ -76,7 +79,9 @@ public final class PEFileReader {
             unsafe.putChar(memNtHeader + i, (char) fileBytes[(int) (dosHeader.e_lfanew + i)]);
         }
         NTHeader ntHeader = this.ntHeader = new NTHeader(memNtHeader, size);
-        ntHeader.read(unsafe, (iat = new ImportAddressTable()));
+        ntHeader.read(unsafe, (iat = new ImportAddressTable()), (debugDirectory = new DebugDirectory()));
+
+        debugDirectory.resolveVA(unsafe, fileBytes);
     }
 
     public void updateNtHeader() {

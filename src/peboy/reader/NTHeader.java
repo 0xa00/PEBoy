@@ -17,11 +17,13 @@ public final class NTHeader {
         is64();
     }
 
-    public void read(Unsafe unsafe, ImportAddressTable iat) {
+    public void read(Unsafe unsafe, ImportAddressTable iat, DebugDirectory debugDirectory) {
         Fh_Machine = Short.toUnsignedInt(unsafe.getShort(address + 4));
 
         iat.setAddress(address + (is64() ? 232 : 216));
         iat.read(unsafe);
+
+        debugDirectory.read(address + (is64() ? 184 : 168), unsafe);
     }
 
     public long getAddress() {
