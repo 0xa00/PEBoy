@@ -1,6 +1,5 @@
 package peboy;
 
-import peboy.config.ObscureConfig;
 import peboy.reader.PEFileReader;
 import peboy.reader.PEHeaderException;
 import sun.misc.Unsafe;
@@ -25,8 +24,12 @@ public class PEBoy {
         }
     }
 
-    public boolean load() {
-        this.peFileReader = new PEFileReader(this.targetFile);
+    public PEFileReader getPeFileReader() {
+        return peFileReader;
+    }
+
+    public boolean load(boolean is64) {
+        this.peFileReader = new PEFileReader(this.targetFile, is64);
         try {
             this.peFileReader.read();
         } catch (IOException | PEHeaderException e) {
@@ -34,10 +37,6 @@ public class PEBoy {
             return false;
         }
         return true;
-    }
-
-    public void obscure(ObscureConfig obscureConfig) {
-
     }
 
     public void finish() {

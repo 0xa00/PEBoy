@@ -1,2 +1,2 @@
 # PEBoy
- Java PE format manipulator (I386, AMD64, IA64)
+ a (not so advanced) java PE format manipulator

@@ -11,12 +11,15 @@ import static peboy.PEBoy.unsafe;
 
 public final class PEFileReader {
     private final File targetFile;
+    private final boolean is64;
     private byte[] fileBytes;
-    private DOSHeader dosHeader;
-    private NTHeader ntHeader;
 
-    public PEFileReader(final File targetFile) {
+    /**
+     * @param is64 If we should use 64 structures instead of 32 (from Win32 defs)
+     */
+    public PEFileReader(final File targetFile, final boolean is64) {
         this.targetFile = targetFile;
+        this.is64 = is64; // use 64 structures?
     }
 
     public void read() throws IOException, PEHeaderException {
@@ -24,45 +27,65 @@ public final class PEFileReader {
         if (bytes[0] != 'M' || bytes[1] != 'Z') {
             throw new PEHeaderException("e_magic != IMAGE_DOS_SIGNATURE");
         }
-        System.out.println(this.fileBytes[0] + " - " + this.fileBytes[1]);
+
+        this.createDosHeader();
+        this.createNtHeader();
+    }
+
+    public void close() {
+        if (dosHeader != null)
+            unsafe.freeMemory(dosHeader.address);
+        if (ntHeader != null)
+            unsafe.freeMemory(ntHeader.address);
+    }
+
+    public File getTargetFile() {
+        return targetFile;
+    }
+
+    // ---------------------------------------------------------------
+    private DOSHeader dosHeader;
+    public void createDosHeader() {
         final long memDosHeader = unsafe.allocateMemory(64);
         if (memDosHeader == 0) {
             throw new OutOfMemoryError("not enough memory for dos header");
         }
         for (int i = 0; i < 64; i++) {
-            unsafe.putChar(memDosHeader + i, (char) bytes[i]);
+            unsafe.putChar(memDosHeader + i, (char) fileBytes[i]);
         }
         DOSHeader dosHeader = this.dosHeader = new DOSHeader(memDosHeader);
         dosHeader.read(unsafe);
-        final long memNtHeader = unsafe.allocateMemory(264);
-        if (memNtHeader == 0) {
-            throw new OutOfMemoryError("not enough memory for nt header");
-        }
-        for (int i = 0; i < 264; i++) {
-            unsafe.putChar(memNtHeader + i, (char) bytes[(int) (dosHeader.e_lfanew + i)]);
-        }
-        NTHeader ntHeader = this.ntHeader = new NTHeader(memNtHeader);
-        ntHeader.read(unsafe);
-        System.out.println(ntHeader.Fh_Machine);
     }
 
-    public void recreateDosHeader() {
+    public void updateDosHeader() {
         for (int i = 0; i < 64; i++) {
             this.fileBytes[i] = (byte) unsafe.getChar(dosHeader.address);
         }
     }
 
-    public void recreateNtHeader() {
+    // ---------------------------------------------------------------
+    private NTHeader ntHeader;
+    public ImportAddressTable iat;
+    public void createNtHeader() {
+        final int size = estimateNtHeaderSize();
+        final long memNtHeader = unsafe.allocateMemory(size);
+        if (memNtHeader == 0) {
+            throw new OutOfMemoryError("not enough memory for nt header");
+        }
         for (int i = 0; i < 264; i++) {
+            unsafe.putChar(memNtHeader + i, (char) fileBytes[(int) (dosHeader.e_lfanew + i)]);
+        }
+        NTHeader ntHeader = this.ntHeader = new NTHeader(memNtHeader, size);
+        ntHeader.read(unsafe, (iat = new ImportAddressTable()));
+    }
+
+    public void updateNtHeader() {
+        for (int i = 0; i < ntHeader.getSize(); i++) {
             this.fileBytes[(int) (dosHeader.e_lfanew + i)] = (byte) unsafe.getChar(ntHeader.address);
         }
     }
 
-    public void close() {
-        unsafe.freeMemory(dosHeader.address);
-    }
-
-    public File getTargetFile() {
-        return targetFile;
+    public int estimateNtHeaderSize() {
+        return is64 ? 264 : 248;
     }
 }
